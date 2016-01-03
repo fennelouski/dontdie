@@ -133,9 +133,39 @@
         UITapGestureRecognizer *tap = [[UITapGestureRecognizer alloc] initWithTarget:self
                                                                               action:@selector(invisibleToolbarTapped:)];
         [_invisibleToolbar addGestureRecognizer:tap];
+        
+        UISwipeGestureRecognizer *leftSwipe = [[UISwipeGestureRecognizer alloc] initWithTarget:self
+                                                                                        action:@selector(disableDriveMode)];
+        leftSwipe.direction = UISwipeGestureRecognizerDirectionLeft;
+        [_invisibleToolbar addGestureRecognizer:leftSwipe];
+        
+        UISwipeGestureRecognizer *rightSwipe = [[UISwipeGestureRecognizer alloc] initWithTarget:self
+                                                                                         action:@selector(enableDriveMode)];
+        rightSwipe.direction = UISwipeGestureRecognizerDirectionRight;
+        [_invisibleToolbar addGestureRecognizer:rightSwipe];
     }
     
     return _invisibleToolbar;
+}
+
+- (void)enableDriveMode {
+    _driveModeEnabled = YES;
+
+    NSTimeInterval delay = 3.0f + arc4random_uniform(6);
+    
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(delay * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+        [self updateAbledViews];
+    });
+}
+
+- (void)disableDriveMode {
+    _driveModeEnabled = NO;
+
+    NSTimeInterval delay = 2.0f;
+    
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(delay * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+        [self updateAbledViews];
+    });
 }
 
 - (void)invisibleToolbarTapped:(UITapGestureRecognizer *)tap {
@@ -210,7 +240,7 @@
     }
     
     if (speed > 0) {
-        self.speedLabel.text = [NSString stringWithFormat:@"Speed: %.02f", speed * 2.237414f];
+        self.speedLabel.text = [NSString stringWithFormat:@"Speed: %.02f", speed * 2.237414f /*   m/s to MPH    */];
         self.navigationController.title = self.speedLabel.text;
     } else {
         self.speedLabel.text = @"";

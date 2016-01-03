@@ -26,10 +26,6 @@
     [super layoutSubviews];
     
     [self addSubview:self.titleLabel];
-    self.titleLabel.frame = CGRectMake(0.0f,
-                                       60.0f,
-                                       self.bounds.size.width,
-                                       self.bounds.size.height * 0.6f);
 }
 
 - (UILabel *)titleLabel {

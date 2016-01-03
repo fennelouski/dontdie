@@ -22,7 +22,9 @@
         
         self.titleLabel.font = [UIFont systemFontOfSize:24.0f];
         
-        [self.titleLabel sizeToFit];
+        CGRect titleLabelFrame = self.titleLabel.frame;
+        titleLabelFrame.size.height = 66.0f;
+        self.titleLabel.frame = titleLabelFrame;
     }
     
     return self;

@@ -5,11 +5,11 @@
         <plugIn identifier="com.apple.InterfaceBuilder.IBCocoaTouchPlugin" version="9529"/>
     </dependencies>
     <scenes>
-        <!--Don't Die-->
+        <!--Don't Die While Driving-->
         <scene sceneID="RC6-YX-0wx">
             <objects>
                 <tableViewController id="7JQ-AX-wk5" customClass="ViewController" sceneMemberID="viewController">
-                    <navigationItem key="navigationItem" title="Don't Die" id="GlM-a9-CeR"/>
+                    <navigationItem key="navigationItem" title="Don't Die While Driving" id="GlM-a9-CeR"/>
                 </tableViewController>
                 <placeholder placeholderIdentifier="IBFirstResponder" id="Fnb-LJ-gyZ" userLabel="First Responder" sceneMemberID="firstResponder"/>
             </objects>
