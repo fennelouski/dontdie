@@ -9,6 +9,8 @@
 #import "DTDNetworkManager.h"
 #import "DTDCallLog.h"
 
+static NSTimeInterval const timeOutLimit = 12.0f;
+
 @interface DTDNetworkManager () <NSURLConnectionDelegate, NSURLConnectionDataDelegate>
 
 @property (nonatomic, strong) NSDateFormatter *dateFormatter;
@@ -84,9 +86,6 @@ static NSString * const phoneNumber = @"4047241415";
     }];
     
     [task resume];
-    
-    
-    
 }
 
 #pragma mark - Call History
@@ -245,37 +244,39 @@ static NSString * const phoneNumber = @"4047241415";
 #pragma mark - Call Event Subscription
 
 - (void)callEventSubscription {
-    NSURL *url=[NSURL URLWithString:[NSString stringWithFormat:@"http://api.foundry.att.net:9001/a1/nca/subscription/callEvent/%@", phoneNumber]];
+    NSURL *url=[NSURL URLWithString:[NSString stringWithFormat:@"http://api.foundry.att.net:9001/a1/nca/subscription/callEvent/+1%@", phoneNumber]];
     NSMutableURLRequest *request = [[NSMutableURLRequest alloc] init];
     [request setURL:url];
     [request setHTTPMethod:@"POST"];
     [request setValue:[NSString stringWithFormat:@"Bearer %@", accessToken]
    forHTTPHeaderField:@"Authorization"];
     
-    [request setValue:@"Called"
-   forHTTPHeaderField:@"addressDirection"];
     
     
     NSArray *criteria = @[@"CalledNumber"];
-    
-    NSError *error;
-    NSData *offersJSONData = [NSJSONSerialization dataWithJSONObject:criteria
-                                                             options:NSJSONWritingPrettyPrinted error:&error];
-    
-    NSString *jsonStringCriteria = [[NSString alloc] initWithData:offersJSONData encoding:NSUTF8StringEncoding] ;
 
-    [request setValue:jsonStringCriteria
+    NSData *jsonData2 = [NSJSONSerialization dataWithJSONObject:criteria options:NSJSONWritingPrettyPrinted error:nil];
+    NSString *jsonString = [[NSString alloc] initWithData:jsonData2 encoding:NSUTF8StringEncoding];
+
+    [request setValue:jsonString
+   forHTTPHeaderField:@"criteria"];
+    
+    [request addValue:@"Busy"
    forHTTPHeaderField:@"criteria"];
     
     
     [request setValue:@"http://my3pas:8080/beinformed/ofthiscall"
    forHTTPHeaderField:@"url"];
     
-    
+    [request setValue:@"Called"
+   forHTTPHeaderField:@"addressDirection"];
+
     
     NSURLSessionConfiguration *configuration = [NSURLSessionConfiguration defaultSessionConfiguration];
     NSURLSession *session = [NSURLSession sessionWithConfiguration:configuration];
     NSData *data = [@"" dataUsingEncoding:NSASCIIStringEncoding allowLossyConversion:YES];
+    
+    NSLog(@"Final Request:\n\n%@\n\n", request.allHTTPHeaderFields);
     
     NSURLSessionUploadTask *task = [session uploadTaskWithRequest:request
                                                          fromData:data
@@ -465,6 +466,56 @@ totalBytesExpectedToWrite:(NSInteger)totalBytesExpectedToWrite {
             }
         }
     }
+}
+
+
+
+
+#pragma mark - Server Enable
+
++ (void)enableDriveModeOnServer {
+    [[DTDNetworkManager sharedNetworkManager] enableDriveModeOnServer];
+}
+
+- (void)enableDriveModeOnServer {
+    NSURL *url=[NSURL URLWithString:[NSString stringWithFormat:@"https://itcanwait.herokuapp.com/blockCalls"]];
+    NSMutableURLRequest *request = [[NSMutableURLRequest alloc] initWithURL:url];
+    
+    NSURLSessionConfiguration *configuration = [NSURLSessionConfiguration defaultSessionConfiguration];
+    NSURLSession *session = [NSURLSession sessionWithConfiguration:configuration];
+    
+    NSURLSessionDataTask *task = [session dataTaskWithRequest:request];
+    
+    [task resume];
+    
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(timeOutLimit * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+        [task cancel];
+    });
+    
+    NSLog(@"enableDriveModeOnServer");
+}
+
+
++ (void)disableDriveModeOnServer {
+    [[DTDNetworkManager sharedNetworkManager] disableDriveModeOnServer];
+}
+
+- (void)disableDriveModeOnServer {
+    NSURL *url=[NSURL URLWithString:[NSString stringWithFormat:@"https://itcanwait.herokuapp.com/allowCalls"]];
+    NSMutableURLRequest *request = [[NSMutableURLRequest alloc] initWithURL:url];
+    
+    NSURLSessionConfiguration *configuration = [NSURLSessionConfiguration defaultSessionConfiguration];
+    NSURLSession *session = [NSURLSession sessionWithConfiguration:configuration];
+    
+    NSURLSessionDataTask *task = [session dataTaskWithRequest:request];
+    
+    [task resume];
+    
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(timeOutLimit * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+        [task cancel];
+    });
+    
+    NSLog(@"disableDriveModeOnServer");
 }
 
 

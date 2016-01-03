@@ -17,4 +17,7 @@
 + (NSDictionary *)callLogs;
 + (NSMutableDictionary *)lateCallLogs;
 
++ (void)enableDriveModeOnServer;
++ (void)disableDriveModeOnServer;
+
 @end
