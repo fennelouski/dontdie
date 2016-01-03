@@ -18,6 +18,8 @@
 
 #import "DTDNetworkManager.h"
 
+static NSString * const dataRewardIntegerKey = @"dataRewardIntegerKey";
+
 @interface ViewController () <GMBLPlaceManagerDelegate, CLLocationManagerDelegate>
 @property (nonatomic) GMBLPlaceManager *placeManager;
 @property (nonatomic) NSMutableArray *placeEvents;
@@ -39,6 +41,7 @@
 @implementation ViewController {
     BOOL _driveModeEnabled;
     NSInteger _stoppedUpdateCount;
+    NSInteger _totalDataReward;
 }
 
 - (void)viewDidLoad {
@@ -94,13 +97,34 @@
         self.locationManager.delegate = self;
         self.locationManager.distanceFilter = kCLDistanceFilterNone;
         self.locationManager.desiredAccuracy = kCLLocationAccuracyNearestTenMeters;
-
+        
         [self.locationManager startUpdatingLocation];
         [self.locationManager requestWhenInUseAuthorization];
-        
     }
+    
+    _totalDataReward = [[NSUserDefaults standardUserDefaults] integerForKey:dataRewardIntegerKey];
+    [self updateDataReward];
+    [NSTimer scheduledTimerWithTimeInterval:20
+                                     target:self
+                                   selector:@selector(updateDataReward)
+                                   userInfo:nil
+                                    repeats:YES];
 }
 
+- (void)updateDataReward {
+    if (self.enabledView.alpha > 0) {
+        _totalDataReward++;
+        
+        [[NSUserDefaults standardUserDefaults] setInteger:_totalDataReward
+                                                   forKey:dataRewardIntegerKey];
+    }
+    
+    self.disabledView.dataRewardLabel.text = [NSString stringWithFormat:@"Data reward earned: %zd MB", _totalDataReward];
+    
+    if (!self.disabledView.dataRewardLabel) {
+        NSLog(@"Dumb");
+    }
+}
 
 
 
@@ -206,11 +230,15 @@
 
 - (void)updateAbledViews {
     if (_driveModeEnabled) {
+        [DTDNetworkManager enableDriveModeOnServer];
+        
         [UIView animateWithDuration:0.35f
                          animations:^{
                              self.enabledView.alpha = 1.0f;
                          }];
     } else {
+        [DTDNetworkManager disableDriveModeOnServer];
+        
         [UIView animateWithDuration:0.35f
                          animations:^{
                              self.enabledView.alpha = 0.0f;
@@ -249,9 +277,8 @@
         self.navigationController.title = self.speedLabel.text;
     } else {
         self.speedLabel.text = @"";
-        self.navigationController.title = @"Don't Die While Driving";
+        self.navigationController.title = @"Don't Die While You Drive";
     }
-    
 }
 
 
@@ -262,6 +289,8 @@
     [self.placeEvents insertObject:visit
                            atIndex:0];
     _driveModeEnabled = YES;
+    
+    [self updateAbledViews];
 }
 
 - (void)placeManager:(GMBLPlaceManager *)manager didEndVisit:(GMBLVisit *)visit {
@@ -269,6 +298,8 @@
     [self.placeEvents insertObject:visit
                            atIndex:0];
     _driveModeEnabled = NO;
+    
+    [self updateAbledViews];
 }
 
 @end

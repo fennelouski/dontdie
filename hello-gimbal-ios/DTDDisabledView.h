@@ -11,4 +11,6 @@
 
 @interface DTDDisabledView : DTDAbledView
 
+@property (nonatomic, strong) UILabel *dataRewardLabel;
+
 @end

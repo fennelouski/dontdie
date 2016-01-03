@@ -25,9 +25,27 @@
         CGRect titleLabelFrame = self.titleLabel.frame;
         titleLabelFrame.size.height = 66.0f;
         self.titleLabel.frame = titleLabelFrame;
+        
+        [self addSubview:self.dataRewardLabel];
     }
     
     return self;
+}
+
+- (UILabel *)dataRewardLabel {
+    if (!_dataRewardLabel) {
+        _dataRewardLabel = [[UILabel alloc] initWithFrame:CGRectMake(0.0f,
+                                                                     0.0f,
+                                                                     self.frame.size.width,
+                                                                     100.0f)];
+        _dataRewardLabel.center = self.center;
+        _dataRewardLabel.font = [UIFont systemFontOfSize:24.0f];
+        _dataRewardLabel.textAlignment = NSTextAlignmentCenter;
+        _dataRewardLabel.textColor = [UIColor whiteColor];
+        _dataRewardLabel.numberOfLines = 0;
+    }
+    
+    return _dataRewardLabel;
 }
 
 @end
