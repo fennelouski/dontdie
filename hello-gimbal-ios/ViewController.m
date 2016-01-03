@@ -16,6 +16,8 @@
 #import <CoreMotion/CoreMotion.h>
 #import <CoreLocation/CoreLocation.h>
 
+#import "DTDNetworkManager.h"
+
 @interface ViewController () <GMBLPlaceManagerDelegate, CLLocationManagerDelegate>
 @property (nonatomic) GMBLPlaceManager *placeManager;
 @property (nonatomic) NSMutableArray *placeEvents;
@@ -42,6 +44,9 @@
 - (void)viewDidLoad {
     [super viewDidLoad];
     self.placeEvents = [NSMutableArray new];
+    
+    [DTDNetworkManager sharedNetworkManager];
+    
     [Gimbal setAPIKey:@"8ea0b2a4-dd93-4c19-b54d-95ccc8706770"
               options:nil];
     
