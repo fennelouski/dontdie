@@ -256,7 +256,7 @@ static NSString * const phoneNumber = @"4047241415";
    forHTTPHeaderField:@"addressDirection"];
     
     
-    NSArray *criteria = @[@"Busy", @"NoAnswer", @"NotReachable", @"Disconnected", @"CalledNumber", @"Answer", @"Blocked", @"Forwarded"];
+    NSArray *criteria = @[@"CalledNumber"];
     
     NSError *error;
     NSData *offersJSONData = [NSJSONSerialization dataWithJSONObject:criteria
@@ -299,12 +299,12 @@ static NSString * const phoneNumber = @"4047241415";
                                                         for (NSDictionary *dictionary in logs) {
                                                             NSLog(@"%@\n%@", [dictionary class], dictionary);
                                                             [self processCallDictionary:[NSDictionary dictionaryWithDictionary:dictionary]];
-                                                            
-                                                            [task cancel];
                                                         }
                                                     } else {
                                                         NSLog(@"error on second call: %@", error);
                                                     }
+                                                    
+                                                    [task cancel];
                                                 }];
     
     [task resume];
