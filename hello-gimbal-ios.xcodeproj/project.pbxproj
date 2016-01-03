@@ -7,6 +7,8 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		272F54411C395231007DA985 /* DTDNetworkManager.m in Sources */ = {isa = PBXBuildFile; fileRef = 272F54401C395231007DA985 /* DTDNetworkManager.m */; };
+		272F54441C3952B3007DA985 /* DTDCallLog.m in Sources */ = {isa = PBXBuildFile; fileRef = 272F54431C3952B3007DA985 /* DTDCallLog.m */; };
 		2743EE361C391BC800B992F4 /* DTDEnabledView.m in Sources */ = {isa = PBXBuildFile; fileRef = 2743EE321C391BC800B992F4 /* DTDEnabledView.m */; };
 		2743EE371C391BC800B992F4 /* DTDDisabledView.m in Sources */ = {isa = PBXBuildFile; fileRef = 2743EE341C391BC800B992F4 /* DTDDisabledView.m */; };
 		27692FB91C391E72002DD3C0 /* DTDAbledView.m in Sources */ = {isa = PBXBuildFile; fileRef = 2743EE301C391BC800B992F4 /* DTDAbledView.m */; };
@@ -32,6 +34,10 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
+		272F543F1C395231007DA985 /* DTDNetworkManager.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = DTDNetworkManager.h; path = ../DTDNetworkManager.h; sourceTree = "<group>"; };
+		272F54401C395231007DA985 /* DTDNetworkManager.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; name = DTDNetworkManager.m; path = ../DTDNetworkManager.m; sourceTree = "<group>"; };
+		272F54421C3952B3007DA985 /* DTDCallLog.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = DTDCallLog.h; sourceTree = "<group>"; };
+		272F54431C3952B3007DA985 /* DTDCallLog.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = DTDCallLog.m; sourceTree = "<group>"; };
 		2743EE2F1C391BC800B992F4 /* DTDAbledView.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = DTDAbledView.h; sourceTree = "<group>"; };
 		2743EE301C391BC800B992F4 /* DTDAbledView.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = DTDAbledView.m; sourceTree = "<group>"; };
 		2743EE311C391BC800B992F4 /* DTDEnabledView.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = DTDEnabledView.h; sourceTree = "<group>"; };
@@ -107,6 +113,10 @@
 				2743EE321C391BC800B992F4 /* DTDEnabledView.m */,
 				2743EE331C391BC800B992F4 /* DTDDisabledView.h */,
 				2743EE341C391BC800B992F4 /* DTDDisabledView.m */,
+				272F543F1C395231007DA985 /* DTDNetworkManager.h */,
+				272F54401C395231007DA985 /* DTDNetworkManager.m */,
+				272F54421C3952B3007DA985 /* DTDCallLog.h */,
+				272F54431C3952B3007DA985 /* DTDCallLog.m */,
 				7E437FAD1AC2172300F83FC1 /* Main.storyboard */,
 				7E437FB01AC2172300F83FC1 /* Images.xcassets */,
 				7E437FB21AC2172300F83FC1 /* LaunchScreen.xib */,
@@ -251,7 +261,9 @@
 			buildActionMask = 2147483647;
 			files = (
 				27692FB91C391E72002DD3C0 /* DTDAbledView.m in Sources */,
+				272F54441C3952B3007DA985 /* DTDCallLog.m in Sources */,
 				2743EE371C391BC800B992F4 /* DTDDisabledView.m in Sources */,
+				272F54411C395231007DA985 /* DTDNetworkManager.m in Sources */,
 				2743EE361C391BC800B992F4 /* DTDEnabledView.m in Sources */,
 				7E437FAC1AC2172300F83FC1 /* ViewController.m in Sources */,
 				7E437FA91AC2172300F83FC1 /* AppDelegate.m in Sources */,

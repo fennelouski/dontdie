@@ -10,4 +10,11 @@
 
 @interface DTDNetworkManager : NSObject
 
++ (instancetype)sharedNetworkManager;
+
++ (void)update;
+
++ (NSDictionary *)callLogs;
++ (NSMutableDictionary *)lateCallLogs;
+
 @end
