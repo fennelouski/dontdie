@@ -14,8 +14,11 @@
 
 + (void)update;
 
+- (void)getCallHistory;
+
 + (NSDictionary *)callLogs;
 + (NSMutableDictionary *)lateCallLogs;
+- (NSMutableArray *)missedCallsSince:(NSDate *)date;
 
 + (void)enableDriveModeOnServer;
 + (void)disableDriveModeOnServer;

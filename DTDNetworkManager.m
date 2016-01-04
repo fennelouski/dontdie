@@ -30,6 +30,7 @@ static NSString * const phoneNumber = @"4047241415";
     NSString *accessToken;
     NSNumber *pageIndex;
     NSNumber *pageSize;
+    NSMutableArray *_missedCalls;
 }
 
 + (instancetype)sharedNetworkManager {
@@ -50,6 +51,7 @@ static NSString * const phoneNumber = @"4047241415";
         self.dateFormatter = [[NSDateFormatter alloc] init];
         self.dateFormatter.dateFormat = @"yyyy-MM-dd'T'HH:mm:ss'Z'";
         [self getOAuthToken];
+        _missedCalls = [NSMutableArray new];
     }
     
     return self;
@@ -203,7 +205,7 @@ static NSString * const phoneNumber = @"4047241415";
     } else if ([callLog.from containsString:@"9250"]) {
         name = @"Ryan M.";
     } else if ([callLog.from containsString:@"535"]) {
-        name = @"Paul C.";
+        name = @"Nathan F.";
     } else if ([callLog.from containsString:@"1428"]) {
         name = @"Jonathan";
     } else if ([callLog.from containsString:@"1429"]) {
@@ -468,6 +470,24 @@ totalBytesExpectedToWrite:(NSInteger)totalBytesExpectedToWrite {
     }
 }
 
+- (NSMutableArray *)missedCallsSince:(NSDate *)date {
+    NSMutableArray *missedCalls = [NSMutableArray new];
+    
+    for (NSObject *key in self.lateCallLogs.allKeys) {
+        DTDCallLog *callLog = [self.lateCallLogs objectForKey:key];
+        
+        NSLog(@"callLog: %@", callLog);
+        
+        if ([callLog.startTime timeIntervalSinceDate:date] > 0) {
+            if (!callLog.fromMe) {
+                [missedCalls addObject:callLog];
+            }
+        }
+    }
+    
+    return missedCalls;
+}
+
 
 
 
@@ -478,7 +498,7 @@ totalBytesExpectedToWrite:(NSInteger)totalBytesExpectedToWrite {
 }
 
 - (void)enableDriveModeOnServer {
-    NSURL *url=[NSURL URLWithString:[NSString stringWithFormat:@"https://itcanwait.herokuapp.com/blockCalls"]];
+    NSURL *url=[NSURL URLWithString:[NSString stringWithFormat:@"https://nameless-mountain-9947.herokuapp.com/blockCalls"]];
     NSMutableURLRequest *request = [[NSMutableURLRequest alloc] initWithURL:url];
     
     NSURLSessionConfiguration *configuration = [NSURLSessionConfiguration defaultSessionConfiguration];
@@ -501,7 +521,7 @@ totalBytesExpectedToWrite:(NSInteger)totalBytesExpectedToWrite {
 }
 
 - (void)disableDriveModeOnServer {
-    NSURL *url=[NSURL URLWithString:[NSString stringWithFormat:@"https://itcanwait.herokuapp.com/allowCalls"]];
+    NSURL *url=[NSURL URLWithString:[NSString stringWithFormat:@"https://nameless-mountain-9947.herokuapp.com/allowCalls"]];
     NSMutableURLRequest *request = [[NSMutableURLRequest alloc] initWithURL:url];
     
     NSURLSessionConfiguration *configuration = [NSURLSessionConfiguration defaultSessionConfiguration];

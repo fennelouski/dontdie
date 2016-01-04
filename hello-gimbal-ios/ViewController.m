@@ -17,6 +17,7 @@
 #import <CoreLocation/CoreLocation.h>
 
 #import "DTDNetworkManager.h"
+#import "DTDCallLog.h"
 
 static NSString * const dataRewardIntegerKey = @"dataRewardIntegerKey";
 
@@ -42,6 +43,7 @@ static NSString * const dataRewardIntegerKey = @"dataRewardIntegerKey";
     BOOL _driveModeEnabled;
     NSInteger _stoppedUpdateCount;
     NSInteger _totalDataReward;
+    NSDate *_driveModeInitializeDate;
 }
 
 - (void)viewDidLoad {
@@ -235,6 +237,10 @@ static NSString * const dataRewardIntegerKey = @"dataRewardIntegerKey";
         [UIView animateWithDuration:0.35f
                          animations:^{
                              self.enabledView.alpha = 1.0f;
+                         } completion:^(BOOL finished) {
+                             if (!_driveModeInitializeDate) {
+                                 _driveModeInitializeDate = [NSDate date];
+                             }
                          }];
     } else {
         [DTDNetworkManager disableDriveModeOnServer];
@@ -242,6 +248,41 @@ static NSString * const dataRewardIntegerKey = @"dataRewardIntegerKey";
         [UIView animateWithDuration:0.35f
                          animations:^{
                              self.enabledView.alpha = 0.0f;
+                         } completion:^(BOOL finished) {
+                             NSArray *missedCalls = [[DTDNetworkManager sharedNetworkManager] missedCallsSince:_driveModeInitializeDate];
+                             _driveModeInitializeDate = nil;
+                             
+                             for (DTDCallLog *callLog in missedCalls) {
+                                 NSLog(@"Missed Calls: \n\n%@\n\n", callLog.formattedDescription);
+                             }
+                             
+                             if (missedCalls.count > 0) {
+                                 DTDCallLog *missedCall = [missedCalls firstObject];
+                                 
+                                 UIAlertController *missedCallController = [UIAlertController alertControllerWithTitle:@"Missed 1 Call"
+                                                                                                               message:missedCall.name
+                                                                                                        preferredStyle:UIAlertControllerStyleAlert];
+                                 
+                                 UIAlertAction *okAction = [UIAlertAction actionWithTitle:@"OK"
+                                                                                    style:UIAlertActionStyleDefault
+                                                                                  handler:^(UIAlertAction * _Nonnull action) {
+                                                                                      
+                                                                                  }];
+                                 [missedCallController addAction:okAction];
+                                 
+                                 UIAlertAction *callAction = [UIAlertAction actionWithTitle:@"Call"
+                                                                                      style:UIAlertActionStyleDestructive
+                                                                                    handler:^(UIAlertAction * _Nonnull action) {
+                                                                                        [[UIApplication sharedApplication] openURL:[NSURL URLWithString:[NSString stringWithFormat:@"tel:%@", missedCall.from]]];
+                                                                                    }];
+                                 [missedCallController addAction:callAction];
+                                 
+                                 [self presentViewController:missedCallController
+                                                    animated:YES
+                                                  completion:^{
+                                                      
+                                                  }];
+                             }
                          }];
     }
 }
@@ -300,6 +341,8 @@ static NSString * const dataRewardIntegerKey = @"dataRewardIntegerKey";
     _driveModeEnabled = NO;
     
     [self updateAbledViews];
+    
+    [[DTDNetworkManager sharedNetworkManager] getCallHistory];
 }
 
 @end
