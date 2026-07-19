@@ -38,7 +38,7 @@
         _titleLabel.textAlignment = NSTextAlignmentCenter;
         _titleLabel.textColor = [UIColor whiteColor];
         _titleLabel.numberOfLines = 0;
-        _titleLabel.text = @"QWEROIUQ WELRKJQ WEPFOJQWE QPWEOJV: Q\n\nQWEIRUJQ WILJQV<QNWE VLI\n\nQWIEFH Q<JVkhjqwluwqhjkvqwhjk.";
+        _titleLabel.text = @"";
     }
     
     return _titleLabel;

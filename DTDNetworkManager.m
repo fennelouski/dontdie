@@ -1,543 +1,269 @@
 //
 //  DTDNetworkManager.m
-//  hello-gimbal-ios
-//
-//  Created by HAI on 1/3/16.
-//  Copyright © 2016 Gimbal. All rights reserved.
+//  Don't Die
 //
 
 #import "DTDNetworkManager.h"
 #import "DTDCallLog.h"
 
-static NSTimeInterval const timeOutLimit = 12.0f;
+static NSTimeInterval const DTDRequestTimeout = 12.0;
 
-@interface DTDNetworkManager () <NSURLConnectionDelegate, NSURLConnectionDataDelegate>
+static NSString * const DTDAPIBaseURLInfoPlistKey = @"DTDAPIBaseURL";
+static NSString * const DTDDefaultAPIBaseURL = @"https://api.dontdie.app";
 
-@property (nonatomic, strong) NSDateFormatter *dateFormatter;
+static NSString * const DTDDeviceIdentifierDefaultsKey = @"DTDDeviceIdentifier";
+static NSString * const DTDDeviceTokenDefaultsKey = @"DTDDeviceToken";
+static NSString * const DTDTotalRewardDefaultsKey = @"DTDTotalRewardMB";
 
-@property (nonatomic, strong) NSMutableDictionary *callLogs;
-@property (nonatomic, strong) NSMutableDictionary *lateCallLogs;
+@interface DTDNetworkManager ()
+
+@property (nonatomic, strong) NSURLSession *session;
+@property (nonatomic, copy) NSString *baseURLString;
+@property (nonatomic, copy, nullable) NSString *deviceIdentifier;
+@property (nonatomic, copy, nullable) NSString *deviceToken;
+@property (nonatomic) BOOL registrationInFlight;
+@property (nonatomic, strong) NSMutableArray<void (^)(BOOL registered)> *pendingOperations;
+@property (nonatomic, readwrite) NSInteger totalRewardMB;
 
 @end
 
-static NSString * const Consumer_key = @"mYnxvWlp7kPV8faDkv1iWdsUj1fnGFSI";
-static NSString * const Consumer_secret = @"0xxoP1HdNj2BkmWF";
-static NSString * const rootURL = @"http://api.foundry.att.net:9001/oauth/client_credential/accesstoken?grant_type=client_credentials";
-static NSString * const userName = @"4047241415@private.att.net";
-static NSString * const phoneNumber = @"4047241415";
-
-@implementation DTDNetworkManager {
-    NSString *accessToken;
-    NSNumber *pageIndex;
-    NSNumber *pageSize;
-    NSMutableArray *_missedCalls;
-}
+@implementation DTDNetworkManager
 
 + (instancetype)sharedNetworkManager {
-    static DTDNetworkManager *sharedDataManager;
-    
+    static DTDNetworkManager *sharedManager;
     static dispatch_once_t onceToken;
     dispatch_once(&onceToken, ^{
-        sharedDataManager = [[DTDNetworkManager alloc] init];
+        sharedManager = [[DTDNetworkManager alloc] init];
     });
-    
-    return sharedDataManager;
+    return sharedManager;
 }
 
 - (instancetype)init {
     self = [super init];
-    
     if (self) {
-        self.dateFormatter = [[NSDateFormatter alloc] init];
-        self.dateFormatter.dateFormat = @"yyyy-MM-dd'T'HH:mm:ss'Z'";
-        [self getOAuthToken];
-        _missedCalls = [NSMutableArray new];
+        NSURLSessionConfiguration *configuration = [NSURLSessionConfiguration defaultSessionConfiguration];
+        configuration.timeoutIntervalForRequest = DTDRequestTimeout;
+        _session = [NSURLSession sessionWithConfiguration:configuration];
+
+        NSString *configuredURL = [[NSBundle mainBundle] objectForInfoDictionaryKey:DTDAPIBaseURLInfoPlistKey];
+        _baseURLString = configuredURL.length > 0 ? configuredURL : DTDDefaultAPIBaseURL;
+
+        NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
+        _deviceIdentifier = [defaults stringForKey:DTDDeviceIdentifierDefaultsKey];
+        _deviceToken = [defaults stringForKey:DTDDeviceTokenDefaultsKey];
+        _totalRewardMB = [defaults integerForKey:DTDTotalRewardDefaultsKey];
+        _pendingOperations = [NSMutableArray new];
+
+        [self registerDeviceIfNeeded];
     }
-    
     return self;
 }
 
-- (void)getOAuthToken {
-    NSString *clientID = Consumer_key;
-    NSString *secret = Consumer_secret;
-    
-    NSString *authString = [NSString stringWithFormat:@"%@:%@", clientID, secret];
-    NSData * authData = [authString dataUsingEncoding:NSUTF8StringEncoding];
-    NSString *credentials = [NSString stringWithFormat:@"Basic %@", [authData base64EncodedStringWithOptions:0]];
-    
-    NSURLSessionConfiguration *configuration = [NSURLSessionConfiguration defaultSessionConfiguration];
-    [configuration setHTTPAdditionalHeaders:@{ @"Accept": @"application/json", @"Accept-Language": @"en_US", @"Content-Type": @"application/x-www-form-urlencoded", @"Authorization": credentials }];
-    NSURLSession *session = [NSURLSession sessionWithConfiguration:configuration];
-    
-    NSMutableURLRequest *request = [[NSMutableURLRequest alloc] initWithURL:[NSURL URLWithString:rootURL]];
-    request.HTTPMethod = @"POST";
-    
-    NSString *dataString = @"grant_type=client_credentials";
-    NSData *theData = [dataString dataUsingEncoding:NSASCIIStringEncoding allowLossyConversion:YES];
-    
-    NSURLSessionUploadTask *task = [session uploadTaskWithRequest:request fromData:theData completionHandler:^(NSData *data, NSURLResponse *response, NSError *error) {
-        if (!error) {
-            NSDictionary *response = [NSDictionary dictionaryWithDictionary:[NSJSONSerialization JSONObjectWithData:data options:0 error:&error]];
-            NSLog(@"data = %@", response.allKeys);
-            
-            accessToken = [response objectForKey:@"access_token"];
-            NSLog(@"accessToken: %@", accessToken);
-            
-            [self getCallHistory];
-        }
-    }];
-    
-    [task resume];
+#pragma mark - Registration
+
+- (void)registerDeviceIfNeeded {
+    [self performWhenRegistered:nil];
 }
 
-#pragma mark - Call History
-
-- (void)getCallHistory {
-    NSURL *url=[NSURL URLWithString:[NSString stringWithFormat:@"http://api.foundry.att.net:9001/a1/nca/callhistory/%@", phoneNumber]];
-    NSMutableURLRequest *request = [[NSMutableURLRequest alloc] init];
-    [request setURL:url];
-    [request setHTTPMethod:@"GET"];
-    [request setValue:[NSString stringWithFormat:@"Bearer %@", accessToken] forHTTPHeaderField:@"Authorization"];
-    
-    NSURLSessionConfiguration *configuration = [NSURLSessionConfiguration defaultSessionConfiguration];
-    NSURLSession *session = [NSURLSession sessionWithConfiguration:configuration];
-    NSData *data = [@"" dataUsingEncoding:NSASCIIStringEncoding allowLossyConversion:YES];
-    
-    NSURLSessionUploadTask *task = [session uploadTaskWithRequest:request fromData:data completionHandler:^(NSData *data,
-                                                                                                            NSURLResponse *response,
-                                                                                                            NSError *error) {
-        if (!error) {
-            NSLog(@"%@", [[NSDictionary dictionaryWithDictionary:[NSJSONSerialization JSONObjectWithData:data options:0 error:&error]] class]);
-            NSMutableDictionary *responseDictionary = [NSMutableDictionary dictionaryWithDictionary:[NSJSONSerialization JSONObjectWithData:data options:0 error:&error]];
-            NSArray *logs = [responseDictionary objectForKey:@"logs"];
-            
-            NSLog(@"logs: %@", logs);
-            
-            for (NSDictionary *dictionary in logs) {
-                NSLog(@"%@\n%@", [dictionary class], dictionary);
-                [self processCallDictionary:[NSDictionary dictionaryWithDictionary:dictionary]];
-                
-                [task cancel];
-                
-                [self callEventSubscription];
-            }
-            
-            static dispatch_once_t onceToken;
-            dispatch_once(&onceToken, ^{
-                NSLog(@"%@", self.callLogs.allKeys);
-            });
-        } else {
-            NSLog(@"error on second call: %@", error);
-        }
-    }];
-    
-    [task resume];
-}
-
-- (void)processCallDictionary:(NSDictionary *)callDictionary {
-    DTDCallLog *callLog = [DTDCallLog new];
-    
-    NSString *startTimeString = [callDictionary objectForKey:@"startTime"];
-    NSDate *startTime = [self.dateFormatter dateFromString:startTimeString];
-    if (startTime) {
-        callLog.startTime = startTime;
-    } else {
-        NSLog(@"startTimeString: %@", startTimeString);
+// Runs the operation once the device has credentials, registering first if
+// needed. Operations queued while registration is in flight all run when it
+// finishes.
+- (void)performWhenRegistered:(nullable void (^)(BOOL registered))operation {
+    if (self.deviceIdentifier.length > 0 && self.deviceToken.length > 0) {
+        if (operation) operation(YES);
+        return;
     }
-    
-    NSString *endTimeString = [callDictionary objectForKey:@"endTime"];
-    NSDate *endTime = [self.dateFormatter dateFromString:endTimeString];
-    if (endTime) {
-        callLog.endTime = endTime;
-    } else {
-        NSLog(@"endTimeString: %@", endTimeString);
+
+    if (operation) {
+        [self.pendingOperations addObject:[operation copy]];
     }
-    
-    NSString *to = [callDictionary objectForKey:@"to"];
-    if (to) {
-        callLog.to = to;
-    } else {
-        NSLog(@"Not to anyone?");
+
+    if (self.registrationInFlight) {
+        return;
     }
-    
-    
-    NSString *from = [callDictionary objectForKey:@"from"];
-    if (from) {
-        callLog.from = from;
-    } else {
-        NSLog(@"Not from anyone?");
-    }
-    
-    NSString *answeredString = [callDictionary objectForKey:@"answered"];
-    callLog.answered = [answeredString boolValue];
-    
-    NSString *callType = [callDictionary objectForKey:@"calltype"];
-    if (callType) {
-        callLog.callType = callType;
-    } else {
-        NSLog(@"No call type? Transponder?, %@", callDictionary.allKeys);
-    }
-    
-    if ([callLog.from containsString:phoneNumber]) {
-        callLog.fromMe = YES;
-        
-        DTDCallLog *oldCallLog = [self.callLogs objectForKey:callLog.to];
-        if (!oldCallLog || (oldCallLog && [callLog.endTime timeIntervalSinceDate:oldCallLog.endTime] > 0 && ![oldCallLog.callType containsString:@"missed"])) {
-            [self.callLogs setObject:callLog forKey:callLog.to];
-        }
-    } else if ([callLog.to containsString:phoneNumber]) {
-        callLog.fromMe = NO;
-        
-        DTDCallLog *oldCallLog = [self.callLogs objectForKey:callLog.from];
-        if (!oldCallLog || (oldCallLog && [callLog.endTime timeIntervalSinceDate:oldCallLog.endTime] > 0 && ![oldCallLog.callType containsString:@"missed"])) {
-            [self.callLogs setObject:callLog forKey:callLog.from];
-        }
-    } else {
-        NSLog(@"Neither Number is from me!");
-    }
-    
-    NSString *name = @"Rob";
-    
-    if ([callLog.from containsString:@"9387"]) {
-        name = @"Grandma";
-    } else if ([callLog.from containsString:@"8365"]) {
-        name = @"Katie";
-    } else if ([callLog.from containsString:@"9250"]) {
-        name = @"Ryan M.";
-    } else if ([callLog.from containsString:@"535"]) {
-        name = @"Nathan F.";
-    } else if ([callLog.from containsString:@"1428"]) {
-        name = @"Jonathan";
-    } else if ([callLog.from containsString:@"1429"]) {
-        name = @"Jen";
-    } else if ([callLog.from containsString:@"1427"]) {
-        name = @"Leeann";
-    }
-    
-    callLog.name = name;
-    
-    callLog.maximumInterval = 60 * (arc4random_uniform(4)) + arc4random_uniform(24) * 3600;
-    
-    NSLog(@"%@", callLog.formattedDescription);
-    
-    if (callLog.maximumInterval < fabs([callLog.endTime timeIntervalSinceNow])) {
-        if ([callLog.from containsString:phoneNumber]) {
-            callLog.fromMe = YES;
-            
-            DTDCallLog *oldCallLog = [self.lateCallLogs objectForKey:callLog.to];
-            if (!oldCallLog || (oldCallLog && [callLog.endTime timeIntervalSinceDate:oldCallLog.endTime] > 0 && ![oldCallLog.callType containsString:@"missed"])) {
-                [self.lateCallLogs setObject:callLog forKey:callLog.to];
-            }
-        } else if ([callLog.to containsString:phoneNumber]) {
-            callLog.fromMe = NO;
-            
-            DTDCallLog *oldCallLog = [self.lateCallLogs objectForKey:callLog.from];
-            if (!oldCallLog || (oldCallLog && [callLog.endTime timeIntervalSinceDate:oldCallLog.endTime] > 0 && ![oldCallLog.callType containsString:@"missed"])) {
-                [self.lateCallLogs setObject:callLog forKey:callLog.from];
-            }
-        } else {
-            NSLog(@"Neither Number is from me!");
-        }
-    }
-}
+    self.registrationInFlight = YES;
 
+    NSString *appVersion = [[NSBundle mainBundle] objectForInfoDictionaryKey:@"CFBundleShortVersionString"] ?: @"unknown";
+    NSMutableURLRequest *request = [self requestWithMethod:@"POST"
+                                                      path:@"/v1/devices"
+                                                      body:@{ @"platform": @"ios", @"appVersion": appVersion }
+                                             authenticated:NO];
 
+    NSURLSessionDataTask *task = [self.session dataTaskWithRequest:request
+                                                 completionHandler:^(NSData *data, NSURLResponse *response, NSError *error) {
+        dispatch_async(dispatch_get_main_queue(), ^{
+            self.registrationInFlight = NO;
 
-#pragma mark - Call Event Subscription
+            NSDictionary *json = [self jsonFromData:data response:response error:error];
+            NSString *deviceIdentifier = json[@"deviceId"];
+            NSString *deviceToken = json[@"deviceToken"];
 
-- (void)callEventSubscription {
-    NSURL *url=[NSURL URLWithString:[NSString stringWithFormat:@"http://api.foundry.att.net:9001/a1/nca/subscription/callEvent/+1%@", phoneNumber]];
-    NSMutableURLRequest *request = [[NSMutableURLRequest alloc] init];
-    [request setURL:url];
-    [request setHTTPMethod:@"POST"];
-    [request setValue:[NSString stringWithFormat:@"Bearer %@", accessToken]
-   forHTTPHeaderField:@"Authorization"];
-    
-    
-    
-    NSArray *criteria = @[@"CalledNumber"];
-
-    NSData *jsonData2 = [NSJSONSerialization dataWithJSONObject:criteria options:NSJSONWritingPrettyPrinted error:nil];
-    NSString *jsonString = [[NSString alloc] initWithData:jsonData2 encoding:NSUTF8StringEncoding];
-
-    [request setValue:jsonString
-   forHTTPHeaderField:@"criteria"];
-    
-    [request addValue:@"Busy"
-   forHTTPHeaderField:@"criteria"];
-    
-    
-    [request setValue:@"http://my3pas:8080/beinformed/ofthiscall"
-   forHTTPHeaderField:@"url"];
-    
-    [request setValue:@"Called"
-   forHTTPHeaderField:@"addressDirection"];
-
-    
-    NSURLSessionConfiguration *configuration = [NSURLSessionConfiguration defaultSessionConfiguration];
-    NSURLSession *session = [NSURLSession sessionWithConfiguration:configuration];
-    NSData *data = [@"" dataUsingEncoding:NSASCIIStringEncoding allowLossyConversion:YES];
-    
-    NSLog(@"Final Request:\n\n%@\n\n", request.allHTTPHeaderFields);
-    
-    NSURLSessionUploadTask *task = [session uploadTaskWithRequest:request
-                                                         fromData:data
-                                                completionHandler:^(NSData *data,
-                                                                    NSURLResponse *response,
-                                                                    NSError *error) {
-                                                    if (response) {
-                                                        NSLog(@"Response: %@", response);
-                                                    }
-                                                    
-                                                    if (!error) {
-                                                        NSLog(@"No Error! %@", [[NSDictionary dictionaryWithDictionary:[NSJSONSerialization JSONObjectWithData:data options:0 error:&error]] class]);
-                                                        NSMutableDictionary *responseDictionary = [NSMutableDictionary dictionaryWithDictionary:[NSJSONSerialization JSONObjectWithData:data
-                                                                                                                                                                                options:0
-                                                                                                                                                                                  error:&error]];
-                                                        NSLog(@"Data returned: %@", data);
-                                                        NSArray *logs = [responseDictionary objectForKey:@"logs"];
-                                                        
-                                                        NSLog(@"logs: %@", responseDictionary);
-                                                        
-                                                        for (NSDictionary *dictionary in logs) {
-                                                            NSLog(@"%@\n%@", [dictionary class], dictionary);
-                                                            [self processCallDictionary:[NSDictionary dictionaryWithDictionary:dictionary]];
-                                                        }
-                                                    } else {
-                                                        NSLog(@"error on second call: %@", error);
-                                                    }
-                                                    
-                                                    [task cancel];
-                                                }];
-    
-    [task resume];
-}
-
-#pragma mark - Call Control 
-
-- (void)cancelCall {
-    NSURL *url=[NSURL URLWithString:[NSString stringWithFormat:@"http://api.foundry.att.net:9001/a1/nca/callcontrol/call/%@", phoneNumber]];
-    NSMutableURLRequest *request = [[NSMutableURLRequest alloc] init];
-    [request setURL:url];
-    [request setHTTPMethod:@"POST"];
-    [request setValue:[NSString stringWithFormat:@"Bearer %@", accessToken] forHTTPHeaderField:@"Authorization"];
-    
-    NSURLSessionConfiguration *configuration = [NSURLSessionConfiguration defaultSessionConfiguration];
-    NSURLSession *session = [NSURLSession sessionWithConfiguration:configuration];
-    NSData *data = [@"" dataUsingEncoding:NSASCIIStringEncoding allowLossyConversion:YES];
-    
-    NSURLSessionUploadTask *task = [session uploadTaskWithRequest:request fromData:data completionHandler:^(NSData *data,
-                                                                                                            NSURLResponse *response,
-                                                                                                            NSError *error) {
-        if (!error) {
-            NSLog(@"%@", [[NSDictionary dictionaryWithDictionary:[NSJSONSerialization JSONObjectWithData:data options:0 error:&error]] class]);
-            NSMutableDictionary *responseDictionary = [NSMutableDictionary dictionaryWithDictionary:[NSJSONSerialization JSONObjectWithData:data options:0 error:&error]];
-            NSArray *logs = [responseDictionary objectForKey:@"logs"];
-            
-            NSLog(@"logs: %@", logs);
-            
-            for (NSDictionary *dictionary in logs) {
-                NSLog(@"%@\n%@", [dictionary class], dictionary);
-                [self processCallDictionary:[NSDictionary dictionaryWithDictionary:dictionary]];
-                
-                [task cancel];
-            }
-            
-            NSLog(@"%@", self.callLogs.allKeys);
-        } else {
-            NSLog(@"error on second call: %@", error);
-        }
-    }];
-    
-    [task resume];
-}
-
-
-#pragma mark - Connection Delegate
-
-- (void)connection:(NSURLConnection *)connection didFailWithError:(NSError *)error {
-    NSLog(@"%@\ndidFailWithError: %@", connection, error);
-    [connection cancel];
-}
-
-- (BOOL)connectionShouldUseCredentialStorage:(NSURLConnection *)connection {
-    NSLog(@"connectionShouldUseCredentialStorage: %@", connection);
-    return NO;
-}
-
-- (void)connection:(NSURLConnection *)connection willSendRequestForAuthenticationChallenge:(NSURLAuthenticationChallenge *)challenge {
-    NSLog(@"connection: %@\n\nwillSendRequestForAuthenticationChallenge: %@", connection, challenge);
-}
-
--(void)connection:(NSURLConnection *)connection didReceiveAuthenticationChallenge:(NSURLAuthenticationChallenge *)challenge{
-    if([challenge previousFailureCount] == 0) {
-        NSURLCredential *newCredential;
-        newCredential=[NSURLCredential credentialWithUser:Consumer_key password:Consumer_secret persistence:NSURLCredentialPersistenceNone];
-        [[challenge sender] useCredential:newCredential forAuthenticationChallenge:challenge];}
-    else {
-        [[challenge sender] cancelAuthenticationChallenge:challenge];
-        NSLog(@"Bad Username Or Password");
-    }
-}
-
-
-
-
-
-- (nullable NSURLRequest *)connection:(NSURLConnection *)connection willSendRequest:(NSURLRequest *)request redirectResponse:(nullable NSURLResponse *)response {
-    NSLog(@"connection:(NSURLConnection *)connection willSendRequest:(NSURLRequest *)request redirectResponse:(nullable NSURLResponse *)response");
-    
-    return nil;
-}
-
-- (void)connection:(NSURLConnection *)connection didReceiveResponse:(NSURLResponse *)response {
-    NSLog(@"connection:(NSURLConnection *)connection didReceiveResponse:(NSURLResponse *)response: %@", response);
-    [connection cancel];
-}
-
-- (void)connection:(NSURLConnection *)connection didReceiveData:(NSData *)data {
-    NSLog(@"connection:(NSURLConnection *)connection didReceiveData:(NSData *)data: %@", data);
-}
-
-- (nullable NSInputStream *)connection:(NSURLConnection *)connection needNewBodyStream:(NSURLRequest *)request {
-    NSLog(@"connection:(NSURLConnection *)connection needNewBodyStream:(NSURLRequest *)request: %@", request);
-    return nil;
-}
-
-- (void)connection:(NSURLConnection *)connection
-   didSendBodyData:(NSInteger)bytesWritten
- totalBytesWritten:(NSInteger)totalBytesWritten
-totalBytesExpectedToWrite:(NSInteger)totalBytesExpectedToWrite {
-    NSLog(@"Stuff");
-}
-
-
-
-#pragma mark - Public Methods
-
-- (NSDictionary *)callLogs {
-    if (!_callLogs) {
-        _callLogs = [NSMutableDictionary new];
-    }
-    
-    return _callLogs;
-}
-
-+ (NSDictionary *)callLogs {
-    return [[DTDNetworkManager sharedNetworkManager] callLogs];
-}
-
-- (NSMutableDictionary *)lateCallLogs {
-    if (!_lateCallLogs) {
-        _lateCallLogs = [NSMutableDictionary new];
-    }
-    
-    return _lateCallLogs;
-}
-
-+ (NSMutableDictionary *)lateCallLogs {
-    return [[DTDNetworkManager sharedNetworkManager] lateCallLogs];
-}
-
-+ (void)update {
-    [[DTDNetworkManager sharedNetworkManager] update];
-}
-
-- (void)update {
-    [self.lateCallLogs removeAllObjects];
-    for (NSString *phoneNumberKey in [[DTDNetworkManager sharedNetworkManager] callLogs].allKeys) {
-        DTDCallLog *callLog = [[[DTDNetworkManager sharedNetworkManager] callLogs] objectForKey:phoneNumberKey];
-        
-        if (callLog.maximumInterval < fabs([callLog.endTime timeIntervalSinceNow])) {
-            if ([callLog.from containsString:phoneNumber]) {
-                callLog.fromMe = YES;
-                
-                DTDCallLog *oldCallLog = [self.lateCallLogs objectForKey:callLog.to];
-                if (!oldCallLog || (oldCallLog && [callLog.endTime timeIntervalSinceDate:oldCallLog.endTime] > 0 && ![oldCallLog.callType containsString:@"missed"])) {
-                    [self.lateCallLogs setObject:callLog forKey:callLog.to];
-                }
-            } else if ([callLog.to containsString:phoneNumber]) {
-                callLog.fromMe = NO;
-                
-                DTDCallLog *oldCallLog = [self.lateCallLogs objectForKey:callLog.from];
-                if (!oldCallLog || (oldCallLog && [callLog.endTime timeIntervalSinceDate:oldCallLog.endTime] > 0 && ![oldCallLog.callType containsString:@"missed"])) {
-                    [self.lateCallLogs setObject:callLog forKey:callLog.from];
-                }
+            BOOL registered = deviceIdentifier.length > 0 && deviceToken.length > 0;
+            if (registered) {
+                self.deviceIdentifier = deviceIdentifier;
+                self.deviceToken = deviceToken;
+                NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
+                [defaults setObject:deviceIdentifier forKey:DTDDeviceIdentifierDefaultsKey];
+                [defaults setObject:deviceToken forKey:DTDDeviceTokenDefaultsKey];
             } else {
-                NSLog(@"Neither Number is from me!");
+                NSLog(@"Device registration failed: %@", error ?: json);
             }
-        }
-    }
+
+            NSArray *operations = [self.pendingOperations copy];
+            [self.pendingOperations removeAllObjects];
+            for (void (^pending)(BOOL) in operations) {
+                pending(registered);
+            }
+        });
+    }];
+    [task resume];
 }
 
-- (NSMutableArray *)missedCallsSince:(NSDate *)date {
-    NSMutableArray *missedCalls = [NSMutableArray new];
-    
-    for (NSObject *key in self.lateCallLogs.allKeys) {
-        DTDCallLog *callLog = [self.lateCallLogs objectForKey:key];
-        
-        NSLog(@"callLog: %@", callLog);
-        
-        if ([callLog.startTime timeIntervalSinceDate:date] > 0) {
-            if (!callLog.fromMe) {
-                [missedCalls addObject:callLog];
-            }
-        }
-    }
-    
-    return missedCalls;
-}
-
-
-
-
-#pragma mark - Server Enable
+#pragma mark - Drive mode
 
 + (void)enableDriveModeOnServer {
-    [[DTDNetworkManager sharedNetworkManager] enableDriveModeOnServer];
+    DTDNetworkManager *manager = [DTDNetworkManager sharedNetworkManager];
+    [manager performWhenRegistered:^(BOOL registered) {
+        if (!registered) return;
+        [manager sendDriveModeEnabled:YES completion:nil];
+    }];
 }
 
-- (void)enableDriveModeOnServer {
-    NSURL *url=[NSURL URLWithString:[NSString stringWithFormat:@"https://nameless-mountain-9947.herokuapp.com/blockCalls"]];
-    NSMutableURLRequest *request = [[NSMutableURLRequest alloc] initWithURL:url];
-    
-    NSURLSessionConfiguration *configuration = [NSURLSessionConfiguration defaultSessionConfiguration];
-    NSURLSession *session = [NSURLSession sessionWithConfiguration:configuration];
-    
-    NSURLSessionDataTask *task = [session dataTaskWithRequest:request];
-    
++ (void)disableDriveModeOnServerWithCompletion:(DTDDriveModeDisableCompletion)completion {
+    DTDNetworkManager *manager = [DTDNetworkManager sharedNetworkManager];
+    [manager performWhenRegistered:^(BOOL registered) {
+        if (!registered) {
+            if (completion) {
+                completion(@[], 0, manager.totalRewardMB,
+                           [NSError errorWithDomain:@"DTDNetworkManager"
+                                               code:1
+                                           userInfo:@{ NSLocalizedDescriptionKey: @"Device is not registered with the server." }]);
+            }
+            return;
+        }
+        [manager sendDriveModeEnabled:NO completion:completion];
+    }];
+}
+
+- (void)sendDriveModeEnabled:(BOOL)enabled completion:(nullable DTDDriveModeDisableCompletion)completion {
+    NSString *path = [NSString stringWithFormat:@"/v1/devices/%@/drive-mode", self.deviceIdentifier];
+    NSMutableURLRequest *request = [self requestWithMethod:@"POST"
+                                                      path:path
+                                                      body:@{ @"enabled": @(enabled) }
+                                             authenticated:YES];
+
+    NSURLSessionDataTask *task = [self.session dataTaskWithRequest:request
+                                                 completionHandler:^(NSData *data, NSURLResponse *response, NSError *error) {
+        NSDictionary *json = [self jsonFromData:data response:response error:error];
+
+        NSMutableArray<DTDCallLog *> *missedCalls = [NSMutableArray new];
+        NSInteger rewardEarnedMB = 0;
+        NSInteger totalRewardMB = self.totalRewardMB;
+
+        if (json) {
+            for (NSDictionary *callDictionary in [json[@"missedCalls"] isKindOfClass:[NSArray class]] ? json[@"missedCalls"] : @[]) {
+                DTDCallLog *callLog = [DTDCallLog callLogWithServerDictionary:callDictionary];
+                if (callLog) {
+                    [missedCalls addObject:callLog];
+                }
+            }
+            rewardEarnedMB = [json[@"rewardEarnedMB"] integerValue];
+            NSDictionary *device = [json[@"device"] isKindOfClass:[NSDictionary class]] ? json[@"device"] : nil;
+            if (device[@"totalRewardMB"]) {
+                totalRewardMB = [device[@"totalRewardMB"] integerValue];
+            }
+        }
+
+        dispatch_async(dispatch_get_main_queue(), ^{
+            self.totalRewardMB = totalRewardMB;
+            [[NSUserDefaults standardUserDefaults] setInteger:totalRewardMB forKey:DTDTotalRewardDefaultsKey];
+
+            if (completion) {
+                completion(missedCalls, rewardEarnedMB, totalRewardMB, json ? nil : error);
+            }
+        });
+    }];
     [task resume];
-    
-    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(timeOutLimit * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
-        [task cancel];
-    });
-    
-    NSLog(@"enableDriveModeOnServer");
 }
 
+#pragma mark - Phone number linking
 
-+ (void)disableDriveModeOnServer {
-    [[DTDNetworkManager sharedNetworkManager] disableDriveModeOnServer];
+- (void)linkPhoneNumber:(NSString *)phoneNumber
+             completion:(void (^)(BOOL success, NSError * _Nullable error))completion {
+    [self performWhenRegistered:^(BOOL registered) {
+        if (!registered) {
+            if (completion) completion(NO, nil);
+            return;
+        }
+
+        NSString *path = [NSString stringWithFormat:@"/v1/devices/%@/phone-number", self.deviceIdentifier];
+        NSMutableURLRequest *request = [self requestWithMethod:@"PUT"
+                                                          path:path
+                                                          body:@{ @"phoneNumber": phoneNumber }
+                                                 authenticated:YES];
+
+        NSURLSessionDataTask *task = [self.session dataTaskWithRequest:request
+                                                     completionHandler:^(NSData *data, NSURLResponse *response, NSError *error) {
+            NSDictionary *json = [self jsonFromData:data response:response error:error];
+            dispatch_async(dispatch_get_main_queue(), ^{
+                if (completion) completion(json != nil, error);
+            });
+        }];
+        [task resume];
+    }];
 }
 
-- (void)disableDriveModeOnServer {
-    NSURL *url=[NSURL URLWithString:[NSString stringWithFormat:@"https://nameless-mountain-9947.herokuapp.com/allowCalls"]];
+#pragma mark - Request helpers
+
+- (NSMutableURLRequest *)requestWithMethod:(NSString *)method
+                                      path:(NSString *)path
+                                      body:(nullable NSDictionary *)body
+                             authenticated:(BOOL)authenticated {
+    NSURL *url = [NSURL URLWithString:[self.baseURLString stringByAppendingString:path]];
     NSMutableURLRequest *request = [[NSMutableURLRequest alloc] initWithURL:url];
-    
-    NSURLSessionConfiguration *configuration = [NSURLSessionConfiguration defaultSessionConfiguration];
-    NSURLSession *session = [NSURLSession sessionWithConfiguration:configuration];
-    
-    NSURLSessionDataTask *task = [session dataTaskWithRequest:request];
-    
-    [task resume];
-    
-    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(timeOutLimit * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
-        [task cancel];
-    });
-    
-    NSLog(@"disableDriveModeOnServer");
+    request.HTTPMethod = method;
+    [request setValue:@"application/json" forHTTPHeaderField:@"Content-Type"];
+    [request setValue:@"application/json" forHTTPHeaderField:@"Accept"];
+
+    if (authenticated && self.deviceToken.length > 0) {
+        [request setValue:[NSString stringWithFormat:@"Bearer %@", self.deviceToken]
+       forHTTPHeaderField:@"Authorization"];
+    }
+
+    if (body) {
+        request.HTTPBody = [NSJSONSerialization dataWithJSONObject:body options:0 error:nil];
+    }
+
+    return request;
 }
 
+// Returns the parsed JSON dictionary for a 2xx response, nil otherwise.
+- (nullable NSDictionary *)jsonFromData:(nullable NSData *)data
+                               response:(nullable NSURLResponse *)response
+                                  error:(nullable NSError *)error {
+    if (error || data.length == 0) {
+        NSLog(@"Request failed: %@", error);
+        return nil;
+    }
 
+    NSInteger statusCode = 0;
+    if ([response isKindOfClass:[NSHTTPURLResponse class]]) {
+        statusCode = ((NSHTTPURLResponse *)response).statusCode;
+    }
+
+    NSError *parseError;
+    id json = [NSJSONSerialization JSONObjectWithData:data options:0 error:&parseError];
+    if (![json isKindOfClass:[NSDictionary class]]) {
+        NSLog(@"Unexpected response body: %@", parseError);
+        return nil;
+    }
+
+    if (statusCode < 200 || statusCode >= 300) {
+        NSLog(@"Server returned %zd: %@", statusCode, json);
+        return nil;
+    }
+
+    return json;
+}
 
 @end

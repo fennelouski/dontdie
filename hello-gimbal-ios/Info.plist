@@ -5,7 +5,7 @@
 	<key>CFBundleDevelopmentRegion</key>
 	<string>en</string>
 	<key>CFBundleDisplayName</key>
-	<string>It Can Wait</string>
+	<string>Don't Die</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>
@@ -22,19 +22,29 @@
 	<string>????</string>
 	<key>CFBundleVersion</key>
 	<string>1</string>
+	<key>DTDAPIBaseURL</key>
+	<string>https://api.dontdie.app</string>
+	<key>DTDGimbalAPIKey</key>
+	<string>SET_YOUR_GIMBAL_API_KEY</string>
 	<key>LSApplicationCategoryType</key>
-	<string></string>
+	<string>public.app-category.utilities</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
-	<key>NSAppTransportSecurity</key>
-	<dict>
-		<key>NSAllowsArbitraryLoads</key>
-		<true/>
-	</dict>
-	<key>NSLocationAlwaysUsageDescription</key>
-	<string>We use location to make you happy</string>
-	<key>NSLocationUsageDescription</key>
-	<string>Yo!</string>
+	<key>NSBluetoothAlwaysUsageDescription</key>
+	<string>Bluetooth is used to detect the beacon in your car so drive mode can turn on automatically.</string>
+	<key>NSBluetoothPeripheralUsageDescription</key>
+	<string>Bluetooth is used to detect the beacon in your car so drive mode can turn on automatically.</string>
+	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+	<string>Your location is used to detect when you are driving so calls and texts can be held until you arrive safely. It is never shared or sold.</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>Your location is used to detect when you are driving so calls and texts can be held until you arrive safely. It is never shared or sold.</string>
+	<key>NSMotionUsageDescription</key>
+	<string>Motion data helps confirm that you are driving rather than walking or riding as a passenger.</string>
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>bluetooth-central</string>
+		<string>location</string>
+	</array>
 	<key>UILaunchStoryboardName</key>
 	<string>LaunchScreen</string>
 	<key>UIMainStoryboardFile</key>

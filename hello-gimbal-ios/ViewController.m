@@ -49,10 +49,11 @@ static NSString * const dataRewardIntegerKey = @"dataRewardIntegerKey";
 - (void)viewDidLoad {
     [super viewDidLoad];
     self.placeEvents = [NSMutableArray new];
-    
-    [DTDNetworkManager sharedNetworkManager];
-    
-    [Gimbal setAPIKey:@"8ea0b2a4-dd93-4c19-b54d-95ccc8706770"
+
+    [[DTDNetworkManager sharedNetworkManager] registerDeviceIfNeeded];
+
+    NSString *gimbalAPIKey = [[NSBundle mainBundle] objectForInfoDictionaryKey:@"DTDGimbalAPIKey"];
+    [Gimbal setAPIKey:gimbalAPIKey
               options:nil];
     
     self.placeManager = [GMBLPlaceManager new];
@@ -106,7 +107,9 @@ static NSString * const dataRewardIntegerKey = @"dataRewardIntegerKey";
     
     _totalDataReward = [[NSUserDefaults standardUserDefaults] integerForKey:dataRewardIntegerKey];
     [self updateDataReward];
-    [NSTimer scheduledTimerWithTimeInterval:20
+    // Live estimate while driving (1 MB/minute, matching the server's reward
+    // rate); the authoritative total comes back when drive mode is disabled.
+    [NSTimer scheduledTimerWithTimeInterval:60
                                      target:self
                                    selector:@selector(updateDataReward)
                                    userInfo:nil
@@ -116,16 +119,12 @@ static NSString * const dataRewardIntegerKey = @"dataRewardIntegerKey";
 - (void)updateDataReward {
     if (self.enabledView.alpha > 0) {
         _totalDataReward++;
-        
+
         [[NSUserDefaults standardUserDefaults] setInteger:_totalDataReward
                                                    forKey:dataRewardIntegerKey];
     }
-    
+
     self.disabledView.dataRewardLabel.text = [NSString stringWithFormat:@"Data reward earned: %zd MB", _totalDataReward];
-    
-    if (!self.disabledView.dataRewardLabel) {
-        NSLog(@"Dumb");
-    }
 }
 
 
@@ -243,48 +242,63 @@ static NSString * const dataRewardIntegerKey = @"dataRewardIntegerKey";
                              }
                          }];
     } else {
-        [DTDNetworkManager disableDriveModeOnServer];
-        
+        _driveModeInitializeDate = nil;
+
         [UIView animateWithDuration:0.35f
                          animations:^{
                              self.enabledView.alpha = 0.0f;
-                         } completion:^(BOOL finished) {
-                             NSArray *missedCalls = [[DTDNetworkManager sharedNetworkManager] missedCallsSince:_driveModeInitializeDate];
-                             _driveModeInitializeDate = nil;
-                             
-                             for (DTDCallLog *callLog in missedCalls) {
-                                 NSLog(@"Missed Calls: \n\n%@\n\n", callLog.formattedDescription);
-                             }
-                             
-                             if (missedCalls.count > 0) {
-                                 DTDCallLog *missedCall = [missedCalls firstObject];
-                                 
-                                 UIAlertController *missedCallController = [UIAlertController alertControllerWithTitle:@"Missed 1 Call"
-                                                                                                               message:missedCall.name
-                                                                                                        preferredStyle:UIAlertControllerStyleAlert];
-                                 
-                                 UIAlertAction *okAction = [UIAlertAction actionWithTitle:@"OK"
-                                                                                    style:UIAlertActionStyleDefault
-                                                                                  handler:^(UIAlertAction * _Nonnull action) {
-                                                                                      
-                                                                                  }];
-                                 [missedCallController addAction:okAction];
-                                 
-                                 UIAlertAction *callAction = [UIAlertAction actionWithTitle:@"Call"
-                                                                                      style:UIAlertActionStyleDestructive
-                                                                                    handler:^(UIAlertAction * _Nonnull action) {
-                                                                                        [[UIApplication sharedApplication] openURL:[NSURL URLWithString:[NSString stringWithFormat:@"tel:%@", missedCall.from]]];
-                                                                                    }];
-                                 [missedCallController addAction:callAction];
-                                 
-                                 [self presentViewController:missedCallController
-                                                    animated:YES
-                                                  completion:^{
-                                                      
-                                                  }];
-                             }
                          }];
+
+        [DTDNetworkManager disableDriveModeOnServerWithCompletion:^(NSArray<DTDCallLog *> *missedCalls,
+                                                                    NSInteger rewardEarnedMB,
+                                                                    NSInteger totalRewardMB,
+                                                                    NSError *error) {
+            if (error) {
+                NSLog(@"Could not end drive session on server: %@", error);
+                return;
+            }
+
+            _totalDataReward = totalRewardMB;
+            [[NSUserDefaults standardUserDefaults] setInteger:_totalDataReward
+                                                       forKey:dataRewardIntegerKey];
+            [self updateDataReward];
+
+            [self presentMissedCalls:missedCalls];
+        }];
     }
+}
+
+- (void)presentMissedCalls:(NSArray<DTDCallLog *> *)missedCalls {
+    if (missedCalls.count == 0) {
+        return;
+    }
+
+    DTDCallLog *missedCall = [missedCalls firstObject];
+    NSString *title = missedCalls.count == 1
+        ? @"Missed 1 Call While Driving"
+        : [NSString stringWithFormat:@"Missed %zd Calls While Driving", missedCalls.count];
+
+    UIAlertController *missedCallController = [UIAlertController alertControllerWithTitle:title
+                                                                                  message:[missedCall displayName]
+                                                                           preferredStyle:UIAlertControllerStyleAlert];
+
+    [missedCallController addAction:[UIAlertAction actionWithTitle:@"OK"
+                                                             style:UIAlertActionStyleCancel
+                                                           handler:nil]];
+
+    [missedCallController addAction:[UIAlertAction actionWithTitle:@"Call Back"
+                                                             style:UIAlertActionStyleDefault
+                                                           handler:^(UIAlertAction * _Nonnull action) {
+        NSString *telURLString = [NSString stringWithFormat:@"tel:%@", missedCall.from];
+        NSURL *telURL = [NSURL URLWithString:telURLString];
+        if (telURL) {
+            [[UIApplication sharedApplication] openURL:telURL];
+        }
+    }]];
+
+    [self presentViewController:missedCallController
+                       animated:YES
+                     completion:nil];
 }
 
 
@@ -339,10 +353,8 @@ static NSString * const dataRewardIntegerKey = @"dataRewardIntegerKey";
     [self.placeEvents insertObject:visit
                            atIndex:0];
     _driveModeEnabled = NO;
-    
+
     [self updateAbledViews];
-    
-    [[DTDNetworkManager sharedNetworkManager] getCallHistory];
 }
 
 @end
