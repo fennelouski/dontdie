@@ -6,13 +6,15 @@ in this repo; account/business items need a human with credentials.
 ## 1. Backend deployment
 
 - [x] Backend service implemented (`backend/`) with tests, Dockerfile, Procfile.
-- [ ] Deploy to a host with a **persistent disk** (Fly.io volume, Render disk,
-      or any VM/container platform via the Dockerfile). The JSON file store
-      needs one; for a real multi-node launch, swap `backend/src/store.js` for
-      Postgres behind the same method surface.
-- [ ] Put the service behind HTTPS on a real domain and set that URL as
-      `DTDAPIBaseURL` in the app's Info.plist.
-- [ ] Set up monitoring on `GET /health`.
+- [x] **Deployed to production**: Supabase project `dontdie-backend`
+      (us-east-1) — Postgres + edge function
+      (`backend/supabase/functions/api/index.ts`), live at
+      `https://weqofpccjrcvdqnwcmln.supabase.co/functions/v1/api` with HTTPS.
+      Tables are RLS-locked to the service role; smoke-tested end to end.
+- [x] `DTDAPIBaseURL` in the app's Info.plist points at the live URL.
+- [ ] Set up monitoring on `GET /health` (any uptime pinger).
+- [ ] Optional: put a custom domain (e.g. `api.dontdie.app`) in front via a
+      Supabase custom domain or a proxy, then update `DTDAPIBaseURL`.
 
 ## 2. Telephony (call/text interception)
 

@@ -5,16 +5,34 @@ Heroku app and the retired AT&T Foundry carrier API. It tracks devices, drive-mo
 sessions, and data rewards, and captures missed calls/texts through
 Twilio-compatible webhooks.
 
-## Run
+## Production deployment (live)
+
+Production runs as a **Supabase Edge Function** backed by Postgres, in the
+`dontdie-backend` Supabase project (us-east-1):
+
+- Base URL: `https://weqofpccjrcvdqnwcmln.supabase.co/functions/v1/api`
+- Source: `supabase/functions/api/index.ts` — a Deno/TypeScript port of
+  `src/app.js` with identical routes and response shapes. Postgres tables
+  (`devices`, `sessions`, `missed_calls`, `messages`) have RLS enabled with no
+  policies, so only the function's service role can reach them; device auth is
+  per-device bearer tokens stored as SHA-256 hashes.
+- Redeploy after changes with the Supabase CLI:
+  `supabase functions deploy api --project-ref weqofpccjrcvdqnwcmln --no-verify-jwt`
+  (JWT verification is off because Twilio webhooks arrive unauthenticated and
+  device routes carry their own tokens).
+
+## Local development
 
 ```bash
 node server.js            # PORT (default 3000), DATA_DIR (default ./data)
 npm test                  # node:test suite, no dependencies to install
 ```
 
-Deploy with the included `Dockerfile` (mount a volume at `/data`) or `Procfile`
-(Heroku/Render — note the JSON file store needs a persistent disk; on ephemeral
-filesystems swap `src/store.js` for a database adapter before launch).
+`server.js` + `src/` is the zero-dependency Node reference implementation with
+the test suite — behavior changes go here first, then get mirrored into the
+edge function. It can also be self-hosted directly via the included
+`Dockerfile` (mount a volume at `/data`) or `Procfile` if you ever migrate off
+Supabase.
 
 ## API
 

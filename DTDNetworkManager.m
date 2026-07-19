@@ -9,7 +9,7 @@
 static NSTimeInterval const DTDRequestTimeout = 12.0;
 
 static NSString * const DTDAPIBaseURLInfoPlistKey = @"DTDAPIBaseURL";
-static NSString * const DTDDefaultAPIBaseURL = @"https://api.dontdie.app";
+static NSString * const DTDDefaultAPIBaseURL = @"https://weqofpccjrcvdqnwcmln.supabase.co/functions/v1/api";
 
 static NSString * const DTDDeviceIdentifierDefaultsKey = @"DTDDeviceIdentifier";
 static NSString * const DTDDeviceTokenDefaultsKey = @"DTDDeviceToken";

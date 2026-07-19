@@ -23,7 +23,7 @@
 	<key>CFBundleVersion</key>
 	<string>1</string>
 	<key>DTDAPIBaseURL</key>
-	<string>https://api.dontdie.app</string>
+	<string>https://weqofpccjrcvdqnwcmln.supabase.co/functions/v1/api</string>
 	<key>DTDGimbalAPIKey</key>
 	<string>SET_YOUR_GIMBAL_API_KEY</string>
 	<key>LSApplicationCategoryType</key>

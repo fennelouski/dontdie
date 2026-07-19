@@ -32,7 +32,13 @@ phone's cellular calls directly, and the AT&T Foundry carrier API the 2016
 prototype used no longer exists. Call interception has to happen in the network
 (carrier forwarding + Twilio), which is exactly what the backend implements.
 
-## Running the backend
+## Backend
+
+**Live in production** at
+`https://weqofpccjrcvdqnwcmln.supabase.co/functions/v1/api` (Supabase edge
+function + Postgres, us-east-1). The app ships pointed at this URL.
+
+For local development:
 
 ```bash
 cd backend
@@ -40,17 +46,18 @@ npm test          # no dependencies to install
 node server.js    # PORT=3000 by default
 ```
 
-See `backend/README.md` for the full API and deployment notes (Dockerfile and
-Procfile included).
+See `backend/README.md` for the full API, the production deployment layout,
+and self-hosting options (Dockerfile and Procfile included).
 
 ## Building the iOS app
 
 Requires Xcode on macOS.
 
 1. Open `hello-gimbal-ios.xcodeproj`.
-2. In `hello-gimbal-ios/Info.plist`, set:
-   - `DTDAPIBaseURL` — your deployed backend URL (HTTPS).
-   - `DTDGimbalAPIKey` — your API key from [manager.gimbal.com](https://manager.gimbal.com/).
+2. In `hello-gimbal-ios/Info.plist`:
+   - `DTDAPIBaseURL` — already set to the live production backend; change it
+     only if you deploy your own.
+   - `DTDGimbalAPIKey` — set your API key from [manager.gimbal.com](https://manager.gimbal.com/).
 3. Build and run on a device (Bluetooth beacon detection doesn't work in the
    simulator; the invisible bottom toolbar tap/swipe gestures simulate
    entering/leaving the car for testing).
