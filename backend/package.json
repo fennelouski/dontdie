@@ -1,0 +1,15 @@
+{
+  "name": "dontdie-backend",
+  "version": "1.0.0",
+  "description": "Backend for the Don't Die drive-mode app: device registration, drive sessions, data rewards, and missed-call capture via Twilio-compatible webhooks.",
+  "license": "MIT",
+  "type": "commonjs",
+  "main": "server.js",
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "scripts": {
+    "start": "node server.js",
+    "test": "node --test test/*.test.js"
+  }
+}
